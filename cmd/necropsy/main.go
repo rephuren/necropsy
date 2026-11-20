@@ -20,10 +20,18 @@ func main() { os.Exit(run(os.Args[1:], os.Stdout, os.Stderr)) }
 
 func usage(w io.Writer) {
 	fmt.Fprintln(w, "usage: necropsy inspect [--json] FILE")
+	fmt.Fprintln(w, "       necropsy strings [--min N] [--all] [--class a,b] [--json] FILE")
 }
 
 func run(args []string, out, errw io.Writer) int {
-	if len(args) == 0 || args[0] != "inspect" {
+	if len(args) == 0 {
+		usage(errw)
+		return 2
+	}
+	if args[0] == "strings" {
+		return runStrings(args[1:], out, errw)
+	}
+	if args[0] != "inspect" {
 		usage(errw)
 		return 2
 	}
