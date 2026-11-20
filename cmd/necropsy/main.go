@@ -1,7 +1,8 @@
-// Command necropsy dissects binaries: ELF today, PE next.
+// Command necropsy dissects binaries: ELF and PE.
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -10,6 +11,7 @@ import (
 	"os"
 
 	"github.com/rephuren/necropsy/internal/elfx"
+	"github.com/rephuren/necropsy/internal/pex"
 )
 
 const maxFile = 256 << 20 // refuse to load more than 256 MiB
@@ -40,12 +42,26 @@ func run(args []string, out, errw io.Writer) int {
 		fmt.Fprintln(errw, "error:", err)
 		return 1
 	}
-	f, err := elfx.Parse(data)
-	if err != nil {
-		fmt.Fprintln(errw, "error:", err)
+	var rep report
+	switch {
+	case bytes.HasPrefix(data, []byte("\x7fELF")):
+		f, err := elfx.Parse(data)
+		if err != nil {
+			fmt.Fprintln(errw, "error:", err)
+			return 1
+		}
+		rep = summarize(fs.Arg(0), f)
+	case bytes.HasPrefix(data, []byte("MZ")):
+		f, err := pex.Parse(data)
+		if err != nil {
+			fmt.Fprintln(errw, "error:", err)
+			return 1
+		}
+		rep = summarizePE(fs.Arg(0), f)
+	default:
+		fmt.Fprintln(errw, "error: not an ELF or PE file")
 		return 1
 	}
-	rep := summarize(fs.Arg(0), f)
 	if *asJSON {
 		enc := json.NewEncoder(out)
 		enc.SetIndent("", "  ")

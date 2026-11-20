@@ -53,7 +53,27 @@ func TestInspectErrors(t *testing.T) {
 	}
 	txt := filepath.Join(t.TempDir(), "a.txt")
 	_ = os.WriteFile(txt, []byte("hello"), 0o644)
-	if run([]string{"inspect", txt}, &out, &errb) != 1 || !strings.Contains(errb.String(), "not an ELF") {
+	if run([]string{"inspect", txt}, &out, &errb) != 1 || !strings.Contains(errb.String(), "not an ELF or PE") {
 		t.Error("non-ELF must exit 1 with a clear message")
+	}
+}
+
+func TestInspectPE(t *testing.T) {
+	dir := t.TempDir()
+	src := filepath.Join(dir, "main.go")
+	_ = os.WriteFile(src, []byte("package main\nfunc main(){}\n"), 0o644)
+	out := filepath.Join(dir, "prog.exe")
+	cmd := exec.Command("go", "build", "-o", out, src)
+	cmd.Env = append(os.Environ(), "GOOS=windows", "GOARCH=amd64", "CGO_ENABLED=0")
+	if b, err := cmd.CombinedOutput(); err != nil {
+		t.Skipf("cannot build fixture: %v\n%s", err, b)
+	}
+	var o, e bytes.Buffer
+	if code := run([]string{"inspect", out}, &o, &e); code != 0 || !strings.Contains(o.String(), "PE 64-bit x86-64") || !strings.Contains(o.String(), "ASLR") {
+		t.Fatalf("exit %d\n%s\n%s", code, o.String(), e.String())
+	}
+	o.Reset()
+	if code := run([]string{"inspect", "--json", out}, &o, &e); code != 0 || !strings.Contains(o.String(), "pe_hardening") {
+		t.Errorf("json output lacks pe_hardening: %s", o.String())
 	}
 }
