@@ -77,3 +77,32 @@ func TestInspectPE(t *testing.T) {
 		t.Errorf("json output lacks pe_hardening: %s", o.String())
 	}
 }
+
+func TestStringsCommand(t *testing.T) {
+	f := filepath.Join(t.TempDir(), "sample.bin")
+	_ = os.WriteFile(f, []byte("\x00\x01http://example.test/payload\x00plain words here\x00/etc/passwd\x00\xff"), 0o644)
+	var o, e bytes.Buffer
+	if code := run([]string{"strings", f}, &o, &e); code != 0 {
+		t.Fatalf("exit %d %s", code, e.String())
+	}
+	if !strings.Contains(o.String(), "url") || !strings.Contains(o.String(), "/etc/passwd") || strings.Contains(o.String(), "plain words") {
+		t.Errorf("default output must show only classified strings:\n%s", o.String())
+	}
+	o.Reset()
+	run([]string{"strings", "--all", f}, &o, &e)
+	if !strings.Contains(o.String(), "plain words") {
+		t.Error("--all must include plain strings")
+	}
+	o.Reset()
+	run([]string{"strings", "--class", "path", f}, &o, &e)
+	if strings.Contains(o.String(), "example.test") || !strings.Contains(o.String(), "/etc/passwd") {
+		t.Errorf("--class filter broken:\n%s", o.String())
+	}
+	o.Reset()
+	if code := run([]string{"strings", "--json", f}, &o, &e); code != 0 || !strings.Contains(o.String(), `"summary"`) {
+		t.Errorf("json: %s", o.String())
+	}
+	if run([]string{"strings"}, &o, &e) != 2 || run([]string{"strings", filepath.Join(t.TempDir(), "nope")}, &o, &e) != 1 {
+		t.Error("usage/missing file exit codes")
+	}
+}
